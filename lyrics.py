@@ -18,7 +18,6 @@ assistant_id = 'asst_Uoh3TfssVpHXcrpbrqXDDlqv'
 
 st.set_page_config(page_title="학생 질문 페이지", layout="wide")
 
-# 제작자 이름 
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -34,7 +33,9 @@ if "usingthread" not in st.session_state:
     new_thread = client.beta.threads.create()
     st.session_state["usingthread"] = new_thread.id
 if "status" not in st.session_state:
-    st.session_state["status"] = "idle"  # 또는 waiting_for_approval
+    st.session_state["status"] = "idle"
+if "starter_message_shown" not in st.session_state:
+    st.session_state["starter_message_shown"] = False
 
 # ──────────────────────────────
 # ✅ 사이드바: 정보 입력
@@ -63,13 +64,14 @@ def get_sheet():
     gc = gspread.authorize(credentials)
     return gc.open(st.secrets["google"]["lyrics"]).sheet1
 
+sheet = get_sheet()
+data = sheet.get_all_records()
+
 # ──────────────────────────────
 # ✅ 승인 여부 확인
 # ──────────────────────────────
 approved = False
 latest_answer = None
-sheet = get_sheet()
-data = sheet.get_all_records()
 
 for row in reversed(data):
     if (row["코드"] == code and
@@ -91,7 +93,7 @@ if approved and latest_answer:
 st.title("🎹 생성형AI 가사 만들기")
 st.subheader("📚 대화 내용")
 
-if not st.session_state.get("starter_message_shown"):
+if not st.session_state["starter_message_shown"]:
     st.session_state["conversation"].insert(0, (
         "assistant", "만들고 싶은 노래 가사를 적어주세요. 느낌, 스타일, 형식 등 자세하게 입력해주세요."
     ))
@@ -104,6 +106,9 @@ with st.container(height=500, border=True):
         elif role == "assistant":
             st.chat_message("assistant").write(msg)
 
+# ──────────────────────────────
+# ✅ 입력 및 처리
+# ──────────────────────────────
 question = st.chat_input("✍️ 요청사항을 입력해보세요")
 
 if question:
@@ -114,7 +119,7 @@ if question:
     system_prompt = f"""
     노래 제목: {conversation_title}
 
-    사용자가 다음과 같이 요청했어요.:
+    사용자가 다음과 같이 요청했어요:
     \"{question}\"
     요청한 내용을 반영하여 가사를 생성해주세요.
     """
@@ -154,3 +159,9 @@ if question:
     ]
     sheet.append_row(new_row)
     st.rerun()
+
+# ──────────────────────────────
+# ✅ 승인 대기 중 안내
+# ──────────────────────────────
+if st.session_state["status"] == "waiting_for_approval":
+    st.info("⏳ 선생님이 가사를 확인 중이에요. 잠시만 기다려 주세요.")
